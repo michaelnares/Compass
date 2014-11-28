@@ -118,6 +118,16 @@ public class CompassView extends View
     public boolean dispatchPopulateAccessibilityEvent(final AccessibilityEvent event)
     {
         super.dispatchPopulateAccessibilityEvent(event);
+        if (isShown())
+        {
+            String bearingStr = String.valueOf(bearing);
+            if (bearingStr.length() > AccessibilityEvent.MAX_TEXT_LENGTH)
+                bearingStr = bearingStr.substring(0, AccesibilityEvent.MAX.TEXT.LENGTH);
+
+                event.getText().add(bearingStr);
+                return true;
+        } // ends if block
+        else return false;
     }
 
     @Override
