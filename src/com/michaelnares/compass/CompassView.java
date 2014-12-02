@@ -122,7 +122,7 @@ public class CompassView extends View
         {
             String bearingStr = String.valueOf(bearing);
             if (bearingStr.length() > AccessibilityEvent.MAX_TEXT_LENGTH)
-                bearingStr = bearingStr.substring(0, AccesibilityEvent.MAX.TEXT.LENGTH);
+                bearingStr = bearingStr.substring(0, AccessibilityEvent.MAX_TEXT_LENGTH);
 
                 event.getText().add(bearingStr);
                 return true;
