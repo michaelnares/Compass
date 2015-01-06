@@ -2,8 +2,7 @@ package com.michaelnares.compass;
 
 import android.content.Context;
 import android.content.res.Resources;
-import android.graphics.Canvas;
-import android.graphics.Paint;
+import android.graphics.*;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
@@ -13,21 +12,17 @@ import android.view.accessibility.AccessibilityEvent;
  */
 public class CompassView extends View
 {
-
-    public CompassView(Context context)
-    {
+    public CompassView(Context context) {
         super(context);
         initCompassView();
     }
 
-    public CompassView(Context context, AttributeSet attrs)
-    {
-        super(context,attrs);
+    public CompassView(Context context, AttributeSet attrs) {
+        super(context, attrs);
         initCompassView();
     }
 
-    public CompassView(Context context, AttributeSet ats, int defaultStyle)
-    {
+    public CompassView(Context context, AttributeSet ats, int defaultStyle) {
         super(context, ats, defaultStyle);
         initCompassView();
     }
@@ -41,8 +36,34 @@ public class CompassView extends View
     private String westString;
     private int textHeight;
 
-    protected void initCompassView()
-    {
+    private int[] borderGradientColors, glassGradientColors;
+    private float[] borderGradientPositions, glassGradientPositions;
+
+    private int skyHorizonColorFrom, skyHorizonColorTo, groundHorizonColorFrom, groundHorizonColorTo;
+
+    private float pitch;
+
+    public void setPitch(float pitch) {
+        this.pitch = pitch;
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED);
+    }
+
+    public float getPitch() {
+        return pitch;
+    }
+
+    private float roll;
+
+    public void setRoll(float roll) {
+        this.roll = roll;
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED);
+    }
+
+    public float getRoll() {
+        return roll;
+    }
+
+    protected void initCompassView() {
         setFocusable(true);
 
         Resources r = this.getResources();
@@ -50,7 +71,7 @@ public class CompassView extends View
         circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         circlePaint.setColor(r.getColor(R.color.background_color));
         circlePaint.setStrokeWidth(1);
-        circlePaint.setStyle(Paint.Style.FILL_AND_STROKE);
+        circlePaint.setStyle(Paint.Style.STROKE);
 
         northString = r.getString(R.string.cardinal_north);
         eastString = r.getString(R.string.cardinal_east);
@@ -58,14 +79,58 @@ public class CompassView extends View
         westString = r.getString(R.string.cardinal_west);
 
         textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
         textPaint.setColor(r.getColor(R.color.text_color));
+        textPaint.setFakeBoldText(true);
+        textPaint.setSubpixelText(true);
+        textPaint.setTextAlign(Paint.Align.LEFT);
 
-        textHeight = (int)textPaint.measureText("yY");
+        textHeight = (int) textPaint.measureText("yY");
 
         markerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         markerPaint.setColor(r.getColor(R.color.marker_color));
+        markerPaint.setAlpha(200);
+        markerPaint.setStrokeWidth(1);
+        markerPaint.setStyle(Paint.Style.STROKE);
+        markerPaint.setShadowLayer(2, 1, 1, R.color.shadow_color);
 
+        borderGradientColors = new int[4];
+        borderGradientPositions = new float[4];
+
+        borderGradientColors[3] = r.getColor(R.color.outer_border);
+        borderGradientColors[2] = r.getColor(R.color.inner_border_one);
+        borderGradientColors[1] = r.getColor(R.color.inner_border_two);
+        borderGradientColors[0] = r.getColor(R.color.inner_border);
+        borderGradientPositions[3] = 0.0f;
+        borderGradientPositions[2] = 1 - 0.03f;
+        borderGradientPositions[1] = 1 - 0.06f;
+        borderGradientPositions[0] = 1.0f;
+
+        glassGradientColors = new int[5];
+        glassGradientPositions = new float[5];
+
+        final int glassColor = 245;
+        glassGradientColors[4] = Color.argb(65, glassColor, glassColor, glassColor);
+        glassGradientColors[3] = Color.argb(100, glassColor, glassColor, glassColor);
+        glassGradientColors[2] = Color.argb(50, glassColor, glassColor, glassColor);
+        glassGradientColors[1] = Color.argb(0, glassColor, glassColor, glassColor);
+        glassGradientColors[0] = Color.argb(0, glassColor, glassColor, glassColor);
+
+        glassGradientPositions[4] = 1 - 0.0f;
+        glassGradientPositions[3] = 1 - 0.06f;
+        glassGradientPositions[2] = 1 - 0.10f;
+        glassGradientPositions[1] = 1 - 0.20f;
+        glassGradientPositions[0] = 1 - 1.0f;
+
+        skyHorizonColorFrom = r.getColor(R.color.horizon_sky_from);
+        skyHorizonColorTo = r.getColor(R.color.horizon_sky_to);
+    }
+
+    private enum CompassDirection
+    {
+        N, NNE, NE, ENE,
+        E, ESE, SE, SSE,
+        S, SSW, SW, WSW,
+        W, WNW, NW, NNW
     }
 
     @Override
@@ -84,18 +149,14 @@ public class CompassView extends View
     {
         int result;
 
-       // decode the measurement specifications
+        // decode the measurement specifications
         int specMode = MeasureSpec.getMode(measureSpec);
         int specSize = MeasureSpec.getSize(measureSpec);
 
-        if (specMode == MeasureSpec.UNSPECIFIED)
-        {
+        if (specMode == MeasureSpec.UNSPECIFIED) {
             // return a default size if no bounds are specified
             result = 200;
-        }
-
-        else
-        {
+        } else {
             result = specSize;
         }
         return result;
@@ -103,97 +164,98 @@ public class CompassView extends View
 
     private float bearing;
 
-    public void setBearing(float bearing)
-    {
+    public void setBearing(float bearing) {
         this.bearing = bearing;
         sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED);
     }
 
-    public float getBearing()
-    {
+    public float getBearing() {
         return bearing;
     }
 
     @Override
-    public boolean dispatchPopulateAccessibilityEvent(final AccessibilityEvent event)
-    {
+    public boolean dispatchPopulateAccessibilityEvent(final AccessibilityEvent event) {
         super.dispatchPopulateAccessibilityEvent(event);
-        if (isShown())
-        {
+        if (isShown()) {
             String bearingStr = String.valueOf(bearing);
             if (bearingStr.length() > AccessibilityEvent.MAX_TEXT_LENGTH)
                 bearingStr = bearingStr.substring(0, AccessibilityEvent.MAX_TEXT_LENGTH);
 
-                event.getText().add(bearingStr);
-                return true;
+            event.getText().add(bearingStr);
+            return true;
         } // ends if block
         else return false;
     }
 
     @Override
-    public void onDraw(Canvas canvas)
-    {
+    public void onDraw(Canvas canvas) {
+        float ringWidth = textHeight / 4;
         int mMeasuredWidth = getMeasuredWidth();
         int mMeasuredHeight = getMeasuredHeight();
 
         int px = mMeasuredWidth / 2; // centre widthwise
         int py = mMeasuredHeight / 2; // centre heightwise
+        Point center = new Point(px, py);
 
         int radius = Math.min(px, py);
 
-        //draw the background
+        RectF boundingBox = new RectF(center.x - radius, center.y - radius, center.x + radius, center.y + radius);
+        RectF innerBoundingBox = new RectF(center.x - radius + ringWidth, center.y - radius + ringWidth,
+                center.x + radius - ringWidth, center.y + radius - ringWidth);
 
-        canvas.drawCircle(px, py, radius, circlePaint);
+        float innerRadius = innerBoundingBox.height() / 2;
+        RadialGradient borderGradient = new RadialGradient(px, py, radius, borderGradientColors, borderGradientPositions, Shader.TileMode.CLAMP);
 
-        //rotate the perspective so that the 'top' is facing the current heading
-        canvas.save();
-        canvas.rotate(-bearing, px, py);
-        int textWidth = (int)textPaint.measureText("W");
-        int cardinalX = px - textWidth/2;
-        int cardinalY = py - radius - textHeight;
+        Paint pgb = new Paint();
+        pgb.setShader(borderGradient);
 
-        for (int i = 0; i < 24; i++)
-        {
-            //draw a marker
-            canvas.drawLine(px, py-radius, px, py-radius+10, markerPaint);
-            canvas.save();
-            canvas.translate(0, textHeight);
+        Path outerRingPath = new Path();
+        outerRingPath.addOval(boundingBox, Path.Direction.CW);
 
-            //draw the cardinal points
+        canvas.drawPath(outerRingPath, pgb);
 
-            if (i % 6 == 0)
-            {
-                String dirString = "";
-                switch(i)
-                {
-                    case(0) : {
-                                dirString = northString;
-                                int arrowY = 2 * textHeight;
-                                canvas.drawLine(px, arrowY, px - 5, 3 * textHeight, markerPaint);
-                                canvas.drawLine(px, arrowY, px + 5, 3 * textHeight, markerPaint);
-                                break;
-                            } // ends case(0)
-                    case(6) : dirString = eastString;break;
-                    case(12) : dirString = southString;break;
-                    case(18) : dirString = westString;break;
-                }
-                canvas.drawText(dirString, cardinalX, cardinalY, textPaint);
-            } // if block ends here
+        LinearGradient skyShader = new LinearGradient(center.x, innerBoundingBox.top, center.x, innerBoundingBox.bottom, skyHorizonColorFrom,
+                skyHorizonColorTo, Shader.TileMode.CLAMP);
 
-            else if (i % 3 == 0)
-            {
-                //draw the text every alternate 45deg
-                String angle = String.valueOf(i*15);
-                float angleTextWidth = textPaint.measureText(angle);
+        Paint skyPaint = new Paint();
+        skyPaint.setShader(skyShader);
 
-                int angleTextX = (int)(px - angleTextWidth/2);
-                int angleTextY = py - radius + textHeight;
-                canvas.drawText(angle, angleTextX, angleTextY, textPaint);
+        LinearGradient groundShader = new LinearGradient(center.x, innerBoundingBox.top, center.x, innerBoundingBox.bottom, groundHorizonColorFrom,
+                groundHorizonColorTo, Shader.TileMode.CLAMP);
+
+        Paint groundPaint = new Paint();
+        groundPaint.setShader(groundShader);
+
+        float tiltDegree = pitch;
+
+        //Normalise the pitch and roll values to keep them between 90 degrees and 180 degrees respectively.
+        while (tiltDegree > 90 || tiltDegree < -90) {
+            if (tiltDegree > 90) {
+                tiltDegree = -90 + (tiltDegree - 90);
             }
-            canvas.restore();
-            canvas.rotate(15, px, py);
-        }//for loop ends here
-        canvas.restore();
-    }// onDraw method ends here
 
+            if (tiltDegree < -90) {
+                tiltDegree = 90 - (tiltDegree + 90);
+            }
+        }// while loop ends here
+
+        float rollDegree = roll;
+
+        while (rollDegree > 180 || rollDegree < -180)
+        {
+            if (rollDegree > 180)
+            {
+                rollDegree = -180 + (rollDegree - 180);
+            }
+
+            if (rollDegree < -180)
+            {
+                rollDegree = 180 - (rollDegree + 180);
+            }
+        }// while loop ends here
+
+        Path skyPath = new Path()
+    }
 }
+
+
