@@ -7,6 +7,8 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
 
+import java.util.HashMap;
+
 /**
  * Created by michael on 18/11/2014.
  */
@@ -63,7 +65,8 @@ public class CompassView extends View
         return roll;
     }
 
-    protected void initCompassView() {
+    protected void initCompassView()
+    {
         setFocusable(true);
 
         Resources r = this.getResources();
@@ -108,7 +111,7 @@ public class CompassView extends View
         glassGradientColors = new int[5];
         glassGradientPositions = new float[5];
 
-        final int glassColor = 245;
+        int glassColor = 245;
         glassGradientColors[4] = Color.argb(65, glassColor, glassColor, glassColor);
         glassGradientColors[3] = Color.argb(100, glassColor, glassColor, glassColor);
         glassGradientColors[2] = Color.argb(50, glassColor, glassColor, glassColor);
@@ -125,15 +128,7 @@ public class CompassView extends View
         skyHorizonColorTo = r.getColor(R.color.horizon_sky_to);
     }
 
-    private enum CompassDirection
-    {
-        N, NNE, NE, ENE,
-        E, ESE, SE, SSE,
-        S, SSW, SW, WSW,
-        W, WNW, NW, NNW
-    }
-
-    @Override
+@Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec)
     {
         // fills as much space as possible
@@ -188,7 +183,8 @@ public class CompassView extends View
     }
 
     @Override
-    public void onDraw(Canvas canvas) {
+    public void onDraw(Canvas canvas)
+    {
         float ringWidth = textHeight / 4;
         int mMeasuredWidth = getMeasuredWidth();
         int mMeasuredHeight = getMeasuredHeight();
@@ -241,21 +237,132 @@ public class CompassView extends View
 
         float rollDegree = roll;
 
-        while (rollDegree > 180 || rollDegree < -180)
-        {
-            if (rollDegree > 180)
-            {
+        while (rollDegree > 180 || rollDegree < -180) {
+            if (rollDegree > 180) {
                 rollDegree = -180 + (rollDegree - 180);
             }
 
-            if (rollDegree < -180)
-            {
+            if (rollDegree < -180) {
                 rollDegree = 180 - (rollDegree + 180);
             }
         }// while loop ends here
 
-        Path skyPath = new Path()
-    }
+        Path skyPath = new Path();
+        skyPath.addArc(innerBoundingBox, -tiltDegree, (180 + 2 * tiltDegree));
+        canvas.save();
+        canvas.rotate(-rollDegree, px, py);
+        canvas.drawOval(innerBoundingBox, groundPaint);
+        canvas.drawPath(skyPath, skyPaint);
+        canvas.drawPath(skyPath, markerPaint);
+
+        int markWidth = radius / 3; // face marking next
+        int startX = center.x - markWidth;
+        int endX = center.x + markWidth;
+
+        //Below calculation is to make sure the pitch scale always starts at the current value.
+        double h = innerRadius * Math.cos(Math.toRadians(90-tiltDegree));
+        double justTiltY = center.y - h;
+        float pxPerDegree = (innerBoundingBox.height()/2)/45f;
+
+        for (int i = 90; i >= -90; i -= 10)
+        {
+            double yPos = justTiltY + i * pxPerDegree;
+
+            //Only display the scale within the inner face.
+            if (yPos < (innerBoundingBox.top + textHeight) || yPos > (innerBoundingBox.bottom - textHeight));
+            //Draw a line and the title angle for each scale increment
+            canvas.drawLine(startX, (float)yPos, endX, (float)yPos, markerPaint);
+            int displayPos = (int)tiltDegree - i;
+            String displayString = String.valueOf(displayPos);
+            float stringSizeWidth = textPaint.measureText(displayString);
+            canvas.drawText(displayString, (int)(center.x - (stringSizeWidth/2)), (int)yPos + 1, textPaint);
+        } // ends for loop
+        markerPaint.setStrokeWidth(2);
+        canvas.drawLine(center.x - radius/2, (float)justTiltY, center.x + radius/2, (float)justTiltY, markerPaint);
+        markerPaint.setStrokeWidth(1);
+
+        Path rollArrow = new Path();
+        rollArrow.moveTo(center.x - 3, (int)innerBoundingBox.top + 14);
+        rollArrow.lineTo(center.x, (int)innerBoundingBox.top + 10);
+        rollArrow.moveTo(center.x + 3, (int)innerBoundingBox.top + 14);
+        rollArrow.lineTo(center.x, (int)innerBoundingBox.top + 10);
+        canvas.drawPath(rollArrow, markerPaint);
+
+        String rollText = String.valueOf(rollDegree);
+        double rollTextWidth = textPaint.measureText(rollText);
+        canvas.drawText(rollText, (float)(center.x - (rollTextWidth/2)), innerBoundingBox.top + textHeight + 2, textPaint);
+        canvas.restore();
+        canvas.save();
+        canvas.rotate(180, center.x, center.y);
+
+        for (int i = -180; i < 180; i +=10)
+        {
+            //Show a numeric value every 30 degrees
+          if (i % 30 == 0)
+            {
+                String rollString = String.valueOf(i* -1); // display a numeric value that is the opposite to the current rotation
+                float rollStringWidth = textPaint.measureText(rollString);
+                PointF rollStringCenter = new PointF(center.x-(rollStringWidth/2), (innerBoundingBox.top) + 1 + textHeight);
+                canvas.drawText(rollString, rollStringCenter.x, rollStringCenter.y, textPaint);
+            } // ends if block
+           else
+          {
+                canvas.drawLine(center.x, (int)innerBoundingBox.top, center.x, ((int)innerBoundingBox.top) + 5, markerPaint);
+            }
+            canvas.rotate(10, center.x, center.y);
+        } // ends for loop
+        canvas.restore();
+        canvas.save();
+       canvas.rotate((-1 * (bearing)), px, py);
+        double increment = 22.5;
+
+        HashMap<Integer, String> compassDirections = new HashMap<Integer, String>();
+        compassDirections.put(0, "N");
+        compassDirections.put(1, "NNE");
+        compassDirections.put(2, "NE");
+        compassDirections.put(3, "ENE");
+        compassDirections.put(4, "E");
+        compassDirections.put(5, "ESE");
+        compassDirections.put(6, "SE");
+        compassDirections.put(7, "SSE");
+        compassDirections.put(8, "S");
+        compassDirections.put(9, "SSW");
+        compassDirections.put(10, "SW");
+        compassDirections.put(11, "WSW");
+        compassDirections.put(12, "W");
+        compassDirections.put(13, "WNW");
+        compassDirections.put(14, "NW");
+        compassDirections.put(15, "NNW");
+        
+        for (double i = 0; i < 360; i += increment)
+        {
+            double doubleIndex = i/22.5;
+            int intIndex = (int)doubleIndex;
+            String headString = compassDirections.get(intIndex);
+            if (headString != null)
+            {
+            float headStringWidth = textPaint.measureText(headString);
+            PointF headStringCenter = new PointF(center.x - (headStringWidth/2), boundingBox.top + 1 + textHeight);
+            if (i % increment == 0)
+                {
+                canvas.drawText(headString, headStringCenter.x, headStringCenter.y, textPaint);
+                }
+                else
+                {
+                canvas.drawLine(center.x, (int)boundingBox.top, center.x, (int)boundingBox.top + 3, markerPaint);
+                canvas.rotate((int)increment, center.x, center.y);
+                }
+            } // ends if block for if headString != null
+        }// ends for loop
+        canvas.restore();
+        RadialGradient glassShader = new RadialGradient(px, py, (int)innerRadius,
+                glassGradientColors, glassGradientPositions, Shader.TileMode.CLAMP);
+        Paint glassPaint = new Paint();
+        glassPaint.setShader(glassShader);
+        canvas.drawOval(innerBoundingBox, glassPaint);
+        canvas.drawOval(boundingBox, circlePaint); // outer ring
+        canvas.drawOval(innerBoundingBox, circlePaint);
+        }
 }
 
 
